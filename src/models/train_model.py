@@ -25,7 +25,7 @@ def output_importance(trained_model, features, datadir):
     elif hasattr(trained_model, 'coefficients'):
         feature_imp_dict = dict(zip(features, trained_model.coefficients.astype(float)))
     else:
-        return("No feature importances/coefficients detected")
+        return("No feature importances/coefficients available from model")
     # conversion to json
     with open(os.path.join(datadir, 'feature_importances.json'), 'w') as f:
         json.dump(feature_imp_dict, f)

@@ -22,8 +22,20 @@
             "description":"City average value for features for each prediction split",
             "type":"dictionary of array of float"
         },
+        "segment_ids":{
+            "description":"Segment ids for each element in the segment-level arrays",
+            "type":"array of str"
+        },
         "segment_predictions": {
             "description":"Prediction split index for each segment",
-            "type":"dictionary of array of integer"
-    }
+            "type":"array of integer"
+        },
+        "segment_geometry": {
+            "description":"Geometry info for each segment",
+            "type":"array of dictionaries",
+        },
+        "segment_features": {
+            "description":"Values for each feature, for each segment",
+            "type":" array of arrays of float"
+        }
 }
