@@ -7,6 +7,7 @@ import scipy.stats as ss
 import os
 import json
 import argparse
+from copy import deepcopy
 from .model_classes import Indata, Tuner, Tester
 import data.config
 
@@ -17,7 +18,7 @@ BASE_DIR = os.path.dirname(
             os.path.abspath(__file__))))
 
 
-def output_importance(trained_model, features, datadir):
+def output_importance(trained_model, features):
     # output feature importances or coefficients
     if hasattr(trained_model, 'feature_importances_'):
         feature_imp_dict = dict(zip(features, trained_model.feature_importances_.astype(float)))
@@ -26,10 +27,20 @@ def output_importance(trained_model, features, datadir):
     else:
         return("No feature importances/coefficients detected")
 
+    #return(feature_imp_dict)
     # conversion to json
-    with open(os.path.join(datadir, 'feature_importances.json'), 'w') as f:
+    with open(os.path.join(DATA_FP, 'feature_importances.json'), 'w') as f:
         json.dump(feature_imp_dict, f)
 
+def city_info(data_model, f_cat, f_cont):
+    # function to output citywide information for showcase
+    # just want the raw versions of the continuous features
+    city_features = f_cont
+    # want the dummy versions of categorical
+    dummy_regex = [f+'[0-9]' for f in f_cat]
+    dummy_features = df_pred.filter(regex='|'.join(dummy_regex)).columns.tolist()
+    city_features += dummy_features
+    print(df_pred[city_features+['prediction']].mean())
 
 def set_params():
 
@@ -111,28 +122,25 @@ def get_features(config, data):
     print(('Segment features included: {}'.format(features)))
     if config.tmc_cols:
         features += config.tmc_cols
-
+    
     return f_cat, f_cont, features
 
 
-def predict(trained_model, data_model, best_model_features,
-            features, perf_cutoff, datadir):
+def predict(trained_model, data_model, features, perf_cutoff):
     """
-
-    Args:
-
-    Returns
-        nothing, writes prediction segments to file
+    # runs predictions and outputs full datasets to file
+    # also returns dataset with predictions
     """
 
     preds = trained_model.predict_proba(data_model[features])[::, 1]
     df_pred = data_model.copy(deep=True)
     df_pred['prediction'] = preds
-    df_pred.to_csv(os.path.join(datadir, 'seg_with_predicted.csv'), index=False)
-    df_pred.to_json(os.path.join(datadir, 'seg_with_predicted.json'), orient='index')
+    df_pred.to_csv(os.path.join(PROCESSED_DATA_FP, 'seg_with_predicted.csv'), index=False)
+    df_pred.to_json(os.path.join(PROCESSED_DATA_FP, 'seg_with_predicted.json'), orient='index')
+    return(df_pred)
 
 
-def add_extra_features(data_segs, config, datadir):
+def add_extra_features(data_segs, config):
     """
     Add concerns, atrs and tmcs
     Args:
@@ -145,7 +153,7 @@ def add_extra_features(data_segs, config, datadir):
     # add in tmcs if filepath present
     if config.tmc_cols:
         print('Adding tmcs')
-        tmcs = pd.read_json(datadir+config.tmc, dtype={'near_id': str})[
+        tmcs = pd.read_json(PROCESSED_DATA_FP+config.tmc, dtype={'near_id': str})[
             ['near_id'] + config.tmc_cols]
         data_segs = data_segs.merge(
             tmcs, left_on='segment_id', right_on='near_id', how='left')
@@ -154,22 +162,25 @@ def add_extra_features(data_segs, config, datadir):
     return data_segs
 
 
-def process_features(features, f_cat, f_cont, data_segs):
+def process_features(raw_features, f_cat, f_cont, data_segs):
     # features for linear model
-    lm_features = features
+    lm_features = deepcopy(raw_features)
+    # features for non-linear
+    features = deepcopy(raw_features)
 
     print(('Processing categorical: {}'.format(f_cat)))
     for f in f_cat:
-        t = pd.get_dummies(data_segs[f])
-        t.columns = [f+str(c) for c in t.columns]
-        data_segs = pd.concat([data_segs, t], axis=1)
-        features += t.columns.tolist()
+        cat_dummies = pd.get_dummies(data_segs[f])
+        cat_dummies.columns = [f+str(c) for c in cat_dummies.columns]
+        data_segs = pd.concat(
+            [data_segs, cat_dummies], 
+            axis=1)
+        features += cat_dummies.columns.tolist()
         # for linear model, allow for intercept
-        lm_features += t.columns.tolist()[1:]
+        lm_features += cat_dummies.columns.tolist()[1:]
     # aadt - log-transform
     print(('Processing continuous: {}'.format(f_cont)))
     for f in f_cont:
-
         data_segs['log_%s' % f] = np.log(data_segs[f]+1)
         features += ['log_%s' % f]
         lm_features += ['log_%s' % f]
@@ -178,15 +189,14 @@ def process_features(features, f_cat, f_cont, data_segs):
     features += ['intersection']
     lm_features += ['intersection']
 
-    # remove duplicated features
+    # remove features that have been processed
     features = list(set(features) - set(f_cat+f_cont))
     lm_features = list(set(lm_features) - set(f_cat+f_cont))
 
     return data_segs, features, lm_features
 
 
-def initialize_and_run(data_model, features, lm_features,
-                       datadir, seed=None):
+def initialize_and_run(data_model, features, lm_features, seed=None):
 
     cvp, mp, perf_cutoff = set_params()
 
@@ -234,15 +244,12 @@ def initialize_and_run(data_model, features, lm_features,
     # train on full data
     trained_model = best_model.fit(data_model[best_model_features], data_model['target'])
 
-    # running this to test performance at different weeks
-#    tuned_model = skl.LogisticRegression(**test.rundict['LR_base']['bp'])
-
-    predict(trained_model, data_model, best_model_features,
-            features, perf_cutoff, datadir)
+    df_pred = predict(trained_model, data_model, features, perf_cutoff)
 
     # output feature importances or coefficients
+    output_importance(trained_model, features)
 
-    output_importance(trained_model, features, datadir)
+    return(df_pred)
 
 
 if __name__ == '__main__':
@@ -250,8 +257,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # parse arguments
     parser.add_argument("-c", "--config", type=str,
-                        help="yml file for model config"
-    )
+                        help="yml file for model config",
+                        required=True)
     parser.add_argument('-d', '--datadir', type=str,
                         help="data directory")
 
@@ -267,16 +274,16 @@ if __name__ == '__main__':
 
     # Read in data
     data = pd.read_csv(seg_data, dtype={'segment_id': 'str'})
+    
+    f_cat, f_cont, raw_features = get_features(config, data)
 
-    f_cat, f_cont, features = get_features(config, data)
-
-    data = add_extra_features(data, config, PROCESSED_DATA_FP)
+    data = add_extra_features(data, config)
     # grab the highest values from each column
-    data_segs = data.groupby('segment_id')[features].max()
+    data_segs = data.groupby('segment_id')[raw_features].max()
     data_segs.reset_index(inplace=True)
 
     data_segs, features, lm_features = process_features(
-        features, f_cat, f_cont, data_segs)
+        raw_features, f_cat, f_cont, data_segs)
     # if not week, get any crash 0/1
     any_crash = data.groupby('segment_id')['crash'].max()
     any_crash = (any_crash>0).astype(int)
@@ -284,9 +291,11 @@ if __name__ == '__main__':
     data_model = data_segs.set_index('segment_id').join(any_crash).reset_index()
     print("full features:{}".format(features))
 
-    initialize_and_run(data_model, features, lm_features,
-                       PROCESSED_DATA_FP)
+    df_pred = initialize_and_run(data_model, features, lm_features)
 
+    # get citywide features
+    city_info(df_pred, f_cat, f_cont)
+    
 
     
 
