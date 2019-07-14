@@ -27,9 +27,8 @@ def output_importance(trained_model, features):
     else:
         return("No feature importances/coefficients detected")
 
-    #return(feature_imp_dict)
     # conversion to json
-    with open(os.path.join(DATA_FP, 'feature_importances.json'), 'w') as f:
+    with open(os.path.join(PROCESSED_DATA_FP, 'feature_importances.json'), 'w') as f:
         json.dump(feature_imp_dict, f)
 
 def city_info(data_model, f_cat, f_cont):
@@ -40,7 +39,10 @@ def city_info(data_model, f_cat, f_cont):
     dummy_regex = [f+'[0-9]' for f in f_cat]
     dummy_features = df_pred.filter(regex='|'.join(dummy_regex)).columns.tolist()
     city_features += dummy_features
-    print(df_pred[city_features+['prediction']].mean())
+    city_average = df_pred[city_features+['prediction']].mean().to_dict()
+    with open(os.path.join(PROCESSED_DATA_FP, 'city_averages.json'), 'w') as f:
+        json.dump(city_average, f)
+
 
 def set_params():
 
