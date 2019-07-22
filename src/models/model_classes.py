@@ -102,6 +102,7 @@ class Tuner():
                     model(),scoring=cvparams['pmetric'], 
                     cv = KFold(cvparams['folds'], cvparams['shuffle']),
                     refit=False, n_iter=cvparams['iter'],
+                    n_jobs=-1,
                     param_distributions=mparams, verbose=1, return_train_score=True)
         return(grid)
     
@@ -178,13 +179,13 @@ class Tester():
     def make_result(self, model, test_x, test_y):
         """ gets predictions and runs metrics """
         preds, probs = self.predsprobs(model, test_x)
-        f1_s, roc, brier = self.get_metrics(preds, probs, test_y)
+        f1_s, roc_auc, brier = self.get_metrics(preds, probs, test_y)
         print("f1_score: ", f1_s)
-        print("roc auc: ", roc)
+        print("roc auc: ", roc_auc)
         print("brier_score: ", brier)
         result = {}
         result['f1_s'] = f1_s
-        result['roc'] = roc
+        result['roc_auc'] = roc_auc
         result['brier'] = brier
         return(result)
 

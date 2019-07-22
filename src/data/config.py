@@ -70,6 +70,14 @@ class Configuration(object):
         self.features = self.default_features + self.categorical_features \
             + self.continuous_features
 
+        self.collect_extra_args(config)
+
+    def collect_extra_args(self, config):
+        # general helper for collecting any args not specified above
+        for arg in config:
+            if not hasattr(self, arg):
+                setattr(self, arg, config[arg])
+
     def get_feature_list(self, config):
         """
         Make the list of features, and write it to the city's data folder

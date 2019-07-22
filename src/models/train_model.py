@@ -82,6 +82,10 @@ def set_defaults(config):
 
     if not hasattr(config, 'seg_data'):
         config.seg_data = 'vz_predict_dataset.csv.gz'
+    if not hasattr(config, 'target'):
+        config.target = 'crash'
+    if not hasattr(config, 'outname'):
+        config.outname = 'seg_with_predicted'
 
         
 def get_features(config, data):
@@ -128,7 +132,7 @@ def get_features(config, data):
     return f_cat, f_cont, features
 
 
-def predict(trained_model, data_model, features, perf_cutoff):
+def predict(trained_model, data_model, features, perf_cutoff, outname='seg_with_predicted'):
     """
     # runs predictions and outputs full datasets to file
     # also returns dataset with predictions
@@ -137,8 +141,8 @@ def predict(trained_model, data_model, features, perf_cutoff):
     preds = trained_model.predict_proba(data_model[features])[::, 1]
     df_pred = data_model.copy(deep=True)
     df_pred['prediction'] = preds
-    df_pred.to_csv(os.path.join(PROCESSED_DATA_FP, 'seg_with_predicted.csv'), index=False)
-    df_pred.to_json(os.path.join(PROCESSED_DATA_FP, 'seg_with_predicted.json'), orient='index')
+    df_pred.to_csv(os.path.join(PROCESSED_DATA_FP, outname+'.csv'), index=False)
+    df_pred.to_json(os.path.join(PROCESSED_DATA_FP, outname+'.json'), orient='index')
     return(df_pred)
 
 
@@ -198,7 +202,7 @@ def process_features(raw_features, f_cat, f_cont, data_segs):
     return data_segs, features, lm_features
 
 
-def initialize_and_run(data_model, features, lm_features, seed=None):
+def initialize_and_run(data_model, features, lm_features, seed=None, outname='seg_with_predicted'):
 
     cvp, mp, perf_cutoff = set_params()
 
@@ -209,7 +213,7 @@ def initialize_and_run(data_model, features, lm_features, seed=None):
 
     # Parameters for model
     # class weight
-    # this needs to adapt to the model data, so can't be specified up from
+    # this needs to adapt to the model data, so can't be specified up front
     a = data_model['target'].value_counts(normalize=True)
     w = 1/a[1]
     mp['XGBClassifier']['scale_pos_weight'] = [w]
@@ -235,8 +239,8 @@ def initialize_and_run(data_model, features, lm_features, seed=None):
     best_perf = 0
     best_model = None
     for m in test.rundict:
-        if test.rundict[m]['roc_auc'] > best_perf:
-            best_perf = test.rundict[m]['roc_auc']
+        if test.rundict[m]['raw']['roc_auc'] > best_perf:
+            best_perf = test.rundict[m]['raw']['roc_auc']
             best_model = test.rundict[m]['model']
             best_model_features = test.rundict[m]['features']
     # check for performance above certain level
@@ -245,8 +249,9 @@ def initialize_and_run(data_model, features, lm_features, seed=None):
 
     # train on full data
     trained_model = best_model.fit(data_model[best_model_features], data_model['target'])
-
-    df_pred = predict(trained_model, data_model, features, perf_cutoff)
+    import pdb
+    pdb.set_trace()
+    df_pred = predict(trained_model, data_model, features, perf_cutoff, outname=outname)
 
     # output feature importances or coefficients
     output_importance(trained_model, features)
@@ -287,13 +292,14 @@ if __name__ == '__main__':
     data_segs, features, lm_features = process_features(
         raw_features, f_cat, f_cont, data_segs)
     # if not week, get any crash 0/1
-    any_crash = data.groupby('segment_id')['crash'].max()
+    any_crash = data.groupby('segment_id')[config.target].max()
+    print("Target is %s" % config.target)
     any_crash = (any_crash>0).astype(int)
     any_crash.name = 'target'
     data_model = data_segs.set_index('segment_id').join(any_crash).reset_index()
     print("full features:{}".format(features))
 
-    df_pred = initialize_and_run(data_model, features, lm_features)
+    df_pred = initialize_and_run(data_model, features, lm_features, outname=config.outname)
 
     # get citywide features
     city_info(df_pred, f_cat, f_cont)
