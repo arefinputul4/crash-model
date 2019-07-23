@@ -59,7 +59,8 @@ def process_data(streets, filename, colname, normalize=False):
         output = output[[colname, 'segment_id']]
 
         # Merge on model results to the GeoDataframe
-        streets_w_risk = streets.merge(output, left_on='id',right_on='segment_id')
+        streets_w_risk = streets.merge(
+            output[['segment_id', colname]], left_on='id',right_on='segment_id')
 
         # normalize predictions if specified
         if normalize:
