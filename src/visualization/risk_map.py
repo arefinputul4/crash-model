@@ -55,6 +55,8 @@ def process_data(streets, filename, colname, normalize=False):
 
         # filter dataframe to only seg with risk>0 to reduce size
         output = output[output[colname]>0]
+        # additionaly shrink to just essential columns
+        output = output[[colname, 'segment_id']]
 
         # Merge on model results to the GeoDataframe
         streets_w_risk = streets.merge(output, left_on='id',right_on='segment_id')
@@ -164,7 +166,7 @@ if __name__ == '__main__':
         add_layer(predictions, model[0], model[2], city_map)
 
     # Add control to toggle between model layers
-    if len(list(match))>1:
+    if len(args.modelname)>1:
         folium.LayerControl(position='bottomright').add_to(city_map)
 
     # Finally, add legend

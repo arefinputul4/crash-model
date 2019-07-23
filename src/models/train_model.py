@@ -249,9 +249,7 @@ def initialize_and_run(data_model, features, lm_features, seed=None, outname='se
 
     # train on full data
     trained_model = best_model.fit(data_model[best_model_features], data_model['target'])
-    import pdb
-    pdb.set_trace()
-    df_pred = predict(trained_model, data_model, features, perf_cutoff, outname=outname)
+    df_pred = predict(trained_model, data_model, best_model_features, perf_cutoff, outname=outname)
 
     # output feature importances or coefficients
     output_importance(trained_model, features)
