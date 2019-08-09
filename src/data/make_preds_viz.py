@@ -95,14 +95,22 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--datadir", type=str,
                         help="data directory")
+    parser.add_argument("-i", "--indata", type=str,
+                        help="input data fn", nargs='?', 
+                        default='seg_with_predicted.json')
+    parser.add_argument("-o", "--outdata", type=str,
+                        help="input data fn", nargs='?',
+                        default='preds_viz.geojson')
 
     args = parser.parse_args()
+    indata = args.indata
+    outdata = args.outdata
 
     # print(os.getcwd())
 
     # confirm files exist & load data
     predictions_file = os.path.join(
-        DATA_FP, args.datadir, "processed", "seg_with_predicted.json")
+        DATA_FP, args.datadir, "processed", indata)
     if not os.path.exists(predictions_file):
         sys.exit("predictions file not found at {}, exiting".format(
             predictions_file))
@@ -128,4 +136,4 @@ if __name__ == "__main__":
     # output the combined prediction + segment data for use
     preds_viz = combine_predictions_and_segments(preds_data, segs_data)
     write_preds_as_geojson(preds_viz, os.path.join(
-        DATA_FP, args.datadir, "processed", "preds_viz.geojson"))
+        DATA_FP, args.datadir, "processed", outdata))

@@ -18,7 +18,7 @@ BASE_DIR = os.path.dirname(
             os.path.abspath(__file__))))
 
 
-def output_importance(trained_model, features):
+def output_importance(trained_model, features, outname):
     # output feature importances or coefficients
     if hasattr(trained_model, 'feature_importances_'):
         feature_imp_dict = dict(zip(features, trained_model.feature_importances_.astype(float)))
@@ -28,7 +28,7 @@ def output_importance(trained_model, features):
         return("No feature importances/coefficients detected")
 
     # conversion to json
-    with open(os.path.join(PROCESSED_DATA_FP, 'feature_importances.json'), 'w') as f:
+    with open(os.path.join(PROCESSED_DATA_FP, outname+'_feature_importances.json'), 'w') as f:
         json.dump(feature_imp_dict, f)
 
 def city_info(data_model, f_cat, f_cont):
@@ -252,7 +252,7 @@ def initialize_and_run(data_model, features, lm_features, seed=None, outname='se
     df_pred = predict(trained_model, data_model, best_model_features, perf_cutoff, outname=outname)
 
     # output feature importances or coefficients
-    output_importance(trained_model, features)
+    output_importance(trained_model, features, outname)
 
     return(df_pred)
 
