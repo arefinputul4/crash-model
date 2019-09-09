@@ -54,11 +54,11 @@ The demo city data is stored as *data-latest.zip* using data-world. Contact one 
     - Supplemental files are optional: any number of csv files that contain a lat/lon point and some type of feature you'd like to extract
 
 - Once you have run the initialize_city script, you need to manually edit the configuration file found in e.g. src/config/config_cambridge:
-        - If OpenStreetMaps does not have polygon data for your city, the road network will need to be constructed manually. Set the city_latitude and city_longitude values to the centerpoint of the city, and the city_radius to an appropriate distance (in km) that you would like the road network to be built for, e.g 15 for 15km radius from the specified lat / lng.
-        - For your csv crash file, enter the column header for id, latitude, longitude, and date.  If time is in a different column than date, give that column header as well. If your csv file does not contain an id field, just put ID here, and the csv will be modified to add an ID
-        - If you have any supplemental files, they will be listed under data_source. For each data source, you'll need to enter the column headers for latitude, longitude, and date.
-        - Modify time_target to be the last month and year of your crash data (this is legacy and you won't need to do this unless you want to do week-by-week modeling)
-        - We also allow you to specify addditional features in the crash file to include in the training data set. This has been designed to handle mode (pedestrian, bike, vehicle) but designed to handle any set of features in the crash file. Here is an example of how to handle mode if it is specified as a single column with different value for each mode
+    - If OpenStreetMaps does not have polygon data for your city, the road network will need to be constructed manually. Set the city_latitude and city_longitude values to the centerpoint of the city, and the city_radius to an appropriate distance (in km) that you would like the road network to be built for, e.g 15 for 15km radius from the specified lat / lng.
+    - For your csv crash file, enter the column header for id, latitude, longitude, and date.  If time is in a different column than date, give that column header as well. If your csv file does not contain an id field, just put ID here, and the csv will be modified to add an ID
+    - If you have any supplemental files, they will be listed under data_source. For each data source, you'll need to enter the column headers for latitude, longitude, and date.
+    - Modify time_target to be the last month and year of your crash data (this is legacy and you won't need to do this unless you want to do week-by-week modeling)
+    - We also allow you to specify addditional features in the crash file to include in the training data set. This has been designed to handle mode (pedestrian, bike, vehicle) but designed to handle any set of features in the crash file. Here is an example of how to handle mode if it is specified as a single column with different value for each mode
 
 ```
       split_columns:
