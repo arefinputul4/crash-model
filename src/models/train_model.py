@@ -37,6 +37,13 @@ def output_importance(trained_model, features, datadir, target):
                 datadir, 'feature_importances_%s.json' % target), 'w') as f:
             json.dump(feature_imp_dict, f)
 
+    # output model
+    import pickle
+    with open(
+        os.path.join(
+            datadir, 'model_%s.pkl' % target), 'wb') as f:
+        pickle.dump(trained_model, f)
+
 def set_params():
 
     #cv parameters
@@ -121,7 +128,7 @@ def get_features(config, data):
 
 
 def predict(trained_model, data_model, best_model_features,
-            features, target, datadir):
+            target, datadir):
     """
 
     Args:
@@ -130,7 +137,7 @@ def predict(trained_model, data_model, best_model_features,
         nothing, writes prediction segments to file
     """
 
-    preds = trained_model.predict_proba(data_model[features])[::, 1]
+    preds = trained_model.predict_proba(data_model[best_model_features])[::, 1]
     df_pred = data_model.copy(deep=True)
     df_pred['prediction'] = preds
     if target == 'crash':
@@ -271,11 +278,11 @@ def initialize_and_run(data_model, features, lm_features, target,
     trained_model = best_model.fit(data_model[best_model_features], data_model[target])
 
     predict(trained_model, data_model, best_model_features,
-            features, target, datadir)
+            target, datadir)
 
     # output feature importances or coefficients
 
-    output_importance(trained_model, features, datadir, target)
+    output_importance(trained_model, best_model_features, datadir, target)
 
 
 if __name__ == '__main__':
