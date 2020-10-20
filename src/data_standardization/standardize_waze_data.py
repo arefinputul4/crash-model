@@ -133,9 +133,12 @@ def read_snapshots(dirname, config, startdate=None, enddate=None):
                 dict(x, eventType='irregularity',
                      snapshotId=count) for x in data['irregularities']
                 if 'city' in x and city in x['city']]
-
-    print("Reading waze data from {} snapshots between {} and {}".format(
-        count, min_start, max_end))
+    if startdate and enddate:
+        print("Reading waze data from {} snapshots between {} and {}".format(
+            count, startdate, enddate))
+    else:
+        print("Reading waze data from {} snapshots between {} and {}".format(
+            count, min_start, max_end))
 
     return all_data
 

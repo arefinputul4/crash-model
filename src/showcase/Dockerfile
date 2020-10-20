@@ -1,6 +1,6 @@
-FROM python:alpine3.7
-RUN pip install flask
-COPY . /app
-WORKDIR /app
-EXPOSE 5000
-CMD ["python", "app.py"]
+FROM nginx
+
+COPY templates/index.html /usr/share/nginx/html
+COPY static /usr/share/nginx/html/static/
+
+COPY nginx.conf /etc/nginx/conf.d/default.conf

@@ -8,7 +8,7 @@ import os
 import json
 import argparse
 from copy import deepcopy
-from .model_classes import Indata, Tuner, Tester
+from models.model_classes import Indata, Tuner, Tester
 import data.config
 
 # all model outputs must be stored in the "data/processed/" directory
@@ -36,6 +36,12 @@ def output_importance(trained_model, features, datadir, target):
             os.path.join(
                 datadir, 'feature_importances_%s.json' % target), 'w') as f:
             json.dump(feature_imp_dict, f)
+
+    # some junk to output model
+    import pickle
+    with open(os.path.join(datadir, 'model.pkl'), 'wb') as f:
+        pickle.dump(trained_model, f)
+
 
 def set_params():
 
@@ -73,7 +79,7 @@ def set_defaults(config):
         config object
     """
     if not hasattr(config, 'seg_data'):
-        config.seg_data = 'vz_predict_dataset.csv.gz'
+        config.seg_data = 'vz_predict_dataset_pre.csv.gz'
 
         
 def get_features(config, data):

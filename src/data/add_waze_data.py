@@ -1,10 +1,10 @@
 import argparse
-from . import util
+from data import util
 import os
 import json
 import geojson
 from collections import defaultdict
-from .record import Record
+from data.record import Record
 
 BASE_DIR = os.path.dirname(
     os.path.dirname(
@@ -125,14 +125,14 @@ def map_segments(datadir, filename, forceupdate=False):
         'osm_elements.geojson'
     )
     road_segments, inters = util.get_roads_and_inters(osm_file)
-    if 'jam' in road_segments[0].properties and not forceupdate:
-        print("Already processed waze data")
-        return
+    #if 'jam' in road_segments[0].properties and not forceupdate:
+    #    print("Already processed waze data")
+    #    return
 
     # Add jam and alert information
     road_segments, roads_with_jams = add_jams(
         items, road_segments, inters, num_snapshots)
-    road_segments = add_alerts(items, road_segments)
+    #road_segments = add_alerts(items, road_segments)
 
     # Convert into format that util.prepare_geojson is expecting
     geojson_roads = []
@@ -171,9 +171,12 @@ def map_segments(datadir, filename, forceupdate=False):
 def add_jams(items, road_segments, inters, num_snapshots):
 
     # Only look at jams for now
+    from time import time
+    st = time()
     items = [get_linestring(x) for x in items
              if x['eventType'] == 'jam']
     items = util.reproject_records(items)
+    print(time()-st)
 
     # Get roads_and_inters returns elements that have shapely geometry
     # In order to output the unchanged points back out at the end,
@@ -197,10 +200,19 @@ def add_jams(items, road_segments, inters, num_snapshots):
     waze_info = defaultdict(list)
     count = 0
 
+    # creating and inventory of waze linestrings to segment ids
+    # simplifies the processing
+    waze_to_segment = {}
+
     for item in items:
         count += 1
 
         if item['properties']['eventType'] == 'jam':
+            line_wkt = item['geometry'].wkt
+            # if we've already joined, don't do it again
+            if line_wkt in waze_to_segment:
+                waze_info[waze_to_segment[line_wkt]].append(item)
+                continue
             for idx in roads_index.intersection(item['geometry'].bounds):
                 segment = roads[idx]
                 buff = road_buffers[idx]
@@ -219,6 +231,7 @@ def add_jams(items, road_segments, inters, num_snapshots):
                     # or very short overlaps
                     continue
                 waze_info[segment.properties['segment_id']].append(item)
+                waze_to_segment[line_wkt] = segment.properties['segment_id']
     # Add waze features
     roads_with_jams = []
 
