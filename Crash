@@ -1,0 +1,218 @@
+(ns user.crash
+  "The deterministic algorithm behind the casino game https://roobet.com/crash.
+
+  Includes code to
+    - generate a crash point from a game hash
+    - generate all game hashes and crash points since the start of the game
+    - simulate betting strategies (n.b. this is just for fun, as there's no way
+      to make a bet with a positive expected value)"
+  (:require [pandect.algo.sha256 :as sha]))
+
+;; hash of bitcoin block #610546
+;;    https://twitter.com/Roobet/status/1211800855223123968
+(def salt "0000000000000000000fa3b65e43e4240d71762a5bf397d5304b2596d116859c")
+
+(defn hex-biginteger [^String s] (BigInteger. s 16))
+
+(defn rpartition-all
+  "Like partition-all, except the first chunk -- rather than the last -- may
+  contain fewer than `n` elements if `xs` cannot be chunked evenly."
+  [n xs]
+  (map reverse (reverse (partition-all n (reverse xs)))))
+
+;; To be completely honest I'm not sure why Roobet's sample code implements
+;; modulus against hex strings instead of just parsing the hex string to a
+;; number and using JavaScript's modulus (see sample @ https://roobet.com/fair),
+;; but I'm going to port their code faithfully because ... chesterton's fence
+(defn divisible? [hex modn]
+  (let [chunk->n #(hex-biginteger (apply str %))]
+    (zero?
+      (reduce
+        (fn [val n] (mod (+ (.shiftLeft (biginteger val) 16) n) modn))
+        0
+        (map chunk->n (rpartition-all 4 hex))))))
+
+(defn crash-point
+  "The crash point for game given its hash."
+  [game-hash]
+  (let [hash (sha/sha256-hmac salt game-hash)
+        e (Math/pow 2 52)
+        h (BigInteger. (subs hash 0 13) 16)
+
+        ;; They changed this magic number at some point in time to reduce the
+        ;; EV of each bet. See:
+        ;;    https://github.com/MindingTheData/Crash-Analysis/issues/1
+        magic-immediate-crash-number 20]
+    (if (divisible? game-hash magic-immediate-crash-number)
+      1.0
+      (/ (Math/floor (/ (- (* 100 e) h) (- e h)))
+         100.0))))
+
+(defn all-game-hashes
+  "A lazy sequence of all game hashes in reverse chronological order from
+  `recent-hash` all the way back to the first game hash."
+  [recent-hash]
+  (let [first-game-hash (str "77b271fe12fca03c618f63dfb79d4105"
+                             "726ba9d4a25bb3f1964e435ccf9cb209")]
+    (concat
+      (->> recent-hash
+           (iterate sha/sha256)
+           (take-while #(not= % first-game-hash)))
+      [first-game-hash])))
+
+(comment
+  ;; E.g. to generate the last million game hashes
+  (def games
+    (time
+      (->> "eeb2553823a150a584767d0dfa990f7fb96d88a125f0ecf773ffed104de2c472"
+           all-game-hashes
+           (take 1000000)
+           (into []))))
+  ; "Elapsed time: 4144.176054 msecs"
+
+  ;; The last 10 game crash points
+  (->> games
+       (take 10)
+       (mapv (fn [gh] {:crash-point (crash-point gh) :game gh})))
+  ;=> [{:crash-point 32.64, :game "eeb2553823a150a584767d0dfa990f7fb96d88a125f0ecf773ffed104de2c472"}
+  ;    {:crash-point 4.69, :game "08c8e0d47b16703c1a3ab72f605732fb2850597969d28d7d14f63f36beae133a"}
+  ;    {:crash-point 2.44, :game "763d38cac9a5e56dc0ed51f0e6cf47544ebd3817aa96a94e071432a02d33a88b"}
+  ;    {:crash-point 1.29, :game "96dce54f6d7e9f12bd9b4ad3429685395dfa94464aa4f189755ed5861a4294a8"}
+  ;    {:crash-point 1.03, :game "cad42a35d39c789c0f006726c5eaf7a44a2cb28c56fc666f9f687dd8cde309eb"}
+  ;    {:crash-point 138.85, :game "eaf49bc33178ceae91f50df199d86129fd834958c9b5295bda8f3530647acc36"}
+  ;    {:crash-point 13.05, :game "cdb0cbd6f6b36c0ed26f3ad8b58feaf18cba6650e858d54030af175a56be5b28"}
+  ;    {:crash-point 1.09, :game "4e5108c551e339c50a6631a7040c3f74a3310a6f10733947c8e50aefd55abcf8"}
+  ;    {:crash-point 4.51, :game "2d5ced83236b0e30ef79250616d0539f531d1b1fd59d8e1cd5ded1e96c168ddd"}
+  ;    {:crash-point 9.8, :game "3d37d4908eb86710af0907ce34a57d1199cf41bab63e6ee05c0737e20ad729ca"}]
+  )
+
+;;; For checking historical expected values
+
+(defn hist-ev
+  "The expected value per bet of betting to cash out at `multiplier` over the
+  given `games` hashes."
+  [multiplier games]
+  (/ (->> games
+          (map
+            (fn [game]
+              (if (>= (crash-point game) multiplier)
+                multiplier
+                0)))
+          (apply +))
+     (double (count games))))
+
+(comment
+  ;; What's the historical EV over the last 10,000 games betting on 2x, 20x,
+  ;; and 200x?
+  (def games
+    (->> "eeb2553823a150a584767d0dfa990f7fb96d88a125f0ecf773ffed104de2c472"
+         all-game-hashes
+         (into [] (take 10000))))
+
+  (hist-ev 2 games)
+  ;=> 0.947
+
+  (hist-ev 20 games)
+  ;=> 0.866
+
+  (hist-ev 200 games)
+  ;=> 0.8
+
+  (hist-ev 2000 games)
+  ;=> 0.4
+
+  (hist-ev 20000 games)
+  ;=> 2.0
+
+  ;; Does that mean betting on larger multipliers has a positive theoretical
+  ;; EV? No; the expected value per bet is always negative, but if you bet on
+  ;; large enough payouts, you can "overfit" your strategy to accomplish the
+  ;l equivalent of quitting when you're ahead.
+  )
+
+;;; For simulating betting strategies
+
+(defn build-summary [summary {:keys [win? usd multiplier]}]
+  (if win?
+    (-> summary
+        (update :wins (fnil inc 1))
+        (update :pnl (fnil + 0M) (* usd (dec multiplier))))
+    (-> summary
+        (update :losses (fnil inc 0))
+        (update :pnl (fnil - 0M) usd))))
+
+(defn simulate [strategy games & {:keys [bankroll take-profit stop-loss]}]
+  (reduce
+    (fn [{:keys [bets summary] :as x} game]
+      (let [bet (strategy bets game)
+            {:keys [pnl] :as summary} (build-summary summary bet)
+            x (assoc x :bets (cons bet bets) :summary summary)]
+        (if (or
+              ;; Bankroll exhausted
+              (and bankroll (>= (- pnl) bankroll))
+              ;; Take profit limit hit
+              (and take-profit (>= pnl take-profit))
+              ;; Stop loss hit
+              (and stop-loss (< pnl stop-loss)))
+          (reduced x)
+          x)))
+    {:bets (list)
+     :summary {:wins 0 :losses 0 :pnl 0}}
+    games))
+
+(defn bet [game {:keys [usd multiplier] :as b}]
+  (let [cp (crash-point game)]
+    (assoc b :win? (<= multiplier cp) :cp cp)))
+
+(comment
+  ;; E.g. simulating a modified martingale strategy over the last thousand
+  ;; games. The strategy starts with a bankroll of 100 USD and bets on a
+  ;; multiplier of 4.
+  ;;
+  ;; A martingale strategy initially bets e.g. $0.10, and if it loses it doubles
+  ;; its bet size, resetting it to $0.10 if it wins. The modification here is
+  ;; that we impose a max bet size limit of $10 to avoid crazy exponential
+  ;; growth.
+  (defn martingale' [[prev-game] game]
+    (bet
+      game
+      {:usd (if (and prev-game (not (:win? prev-game)))
+              (min (* (:usd prev-game) 2M) 10M)
+              0.1M)
+       :multiplier 4}))
+
+  (def last-thousand
+    (->> "eeb2553823a150a584767d0dfa990f7fb96d88a125f0ecf773ffed104de2c472"
+         all-game-hashes
+         (take 1000)
+         (reverse)))
+
+  (def results (simulate martingale' last-thousand :bankroll 100M))
+  (dissoc results :bets)
+  ;=> {:summary {:wins 157, :losses 549, :pnl -101.4M}}
+
+  ;; PnL and win/loss with each bet made throughout the session
+  (->> (reverse (:bets results))
+       (reductions build-summary {})
+       rest
+       (take 10))
+  ;=> ({:losses 1, :pnl -0.1M}
+  ;    {:losses 2, :pnl -0.3M}
+  ;    {:losses 3, :pnl -0.7M}
+  ;    {:losses 3, :pnl 1.7M, :wins 2}
+  ;    {:losses 4, :pnl 1.6M, :wins 2}
+  ;    {:losses 5, :pnl 1.4M, :wins 2}
+  ;    {:losses 6, :pnl 1.0M, :wins 2}
+  ;    {:losses 7, :pnl 0.2M, :wins 2}
+  ;    {:losses 7, :pnl 5.0M, :wins 3}
+  ;    {:losses 8, :pnl 4.9M, :wins 3})
+
+
+  ;; Max P&L during the session
+  (->> (reverse (:bets results))
+       (reductions build-summary {})
+       rest
+       (map :pnl)
+       (apply max))
+  ;=> 256.4M
+  )
